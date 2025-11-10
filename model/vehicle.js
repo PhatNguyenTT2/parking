@@ -23,14 +23,6 @@ const vehicleSchema = new mongoose.Schema({
     required: true,
     default: 'in'
   },
-  entryImagePath: {
-    type: String,
-    default: null
-  },
-  exitImagePath: {
-    type: String,
-    default: null
-  },
   duration: {
     type: Number, // Thời gian lưu trú (phút)
     default: null

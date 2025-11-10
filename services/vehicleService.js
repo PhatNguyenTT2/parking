@@ -35,8 +35,6 @@ const vehicleService = {
           entryTime: new Date(),
           exitTime: null,
           status: 'in',
-          entryImagePath: imagePath,
-          exitImagePath: null,
           duration: null
         },
         { upsert: true, new: true }
@@ -95,7 +93,6 @@ const vehicleService = {
       vehicle.exitTime = new Date()
       vehicle.status = 'out'
       vehicle.duration = duration
-      vehicle.exitImagePath = imagePath
       await vehicle.save()
 
       // Lưu log vào parkingLogs
@@ -148,6 +145,116 @@ const vehicleService = {
       return history
     } catch (error) {
       throw new Error(`Lỗi khi lấy lịch sử xe trong ngày: ${error.message}`)
+    }
+  },
+
+  /**
+   * Lấy thông tin xe với ảnh từ parkingLogs
+   * @param {string} licensePlate - Biển số xe
+   */
+  async getVehicleWithImages(licensePlate) {
+    try {
+      const vehicle = await Vehicle.findOne({ licensePlate })
+      if (!vehicle) return null
+
+      // Lấy ảnh vào gần nhất
+      const entryLog = await ParkingLog.findOne({
+        licensePlate,
+        eventType: 'entry',
+        timestamp: { $lte: vehicle.entryTime }
+      }).sort({ timestamp: -1 })
+
+      // Lấy ảnh ra gần nhất (nếu xe đã ra)
+      let exitLog = null
+      if (vehicle.exitTime) {
+        exitLog = await ParkingLog.findOne({
+          licensePlate,
+          eventType: 'exit',
+          timestamp: { $lte: vehicle.exitTime }
+        }).sort({ timestamp: -1 })
+      }
+
+      return {
+        ...vehicle.toJSON(),
+        entryImagePath: entryLog?.imageUrl || null,
+        exitImagePath: exitLog?.imageUrl || null
+      }
+    } catch (error) {
+      throw new Error(`Lỗi khi lấy thông tin xe với ảnh: ${error.message}`)
+    }
+  },
+
+  /**
+   * Lấy danh sách xe trong bãi với ảnh
+   */
+  async getCarsInsideWithImages() {
+    try {
+      const vehicles = await Vehicle.find({ status: 'in' }).sort({ entryTime: -1 })
+
+      // Lấy ảnh cho từng xe
+      const vehiclesWithImages = await Promise.all(
+        vehicles.map(async (vehicle) => {
+          const entryLog = await ParkingLog.findOne({
+            licensePlate: vehicle.licensePlate,
+            eventType: 'entry'
+          }).sort({ timestamp: -1 })
+
+          return {
+            ...vehicle.toJSON(),
+            entryImagePath: entryLog?.imageUrl || null,
+            exitImagePath: null
+          }
+        })
+      )
+
+      return vehiclesWithImages
+    } catch (error) {
+      throw new Error(`Lỗi khi lấy danh sách xe trong bãi với ảnh: ${error.message}`)
+    }
+  },
+
+  /**
+   * Lấy lịch sử xe trong ngày với ảnh
+   * @param {Date} date - Ngày cần truy vấn
+   */
+  async getTodayHistoryWithImages(date = new Date()) {
+    try {
+      const todayStart = new Date(date.setHours(0, 0, 0, 0))
+      const todayEnd = new Date(date.setHours(23, 59, 59, 999))
+
+      const vehicles = await Vehicle.find({
+        entryTime: { $gte: todayStart, $lte: todayEnd }
+      }).sort({ entryTime: -1 })
+
+      // Lấy ảnh cho từng xe
+      const vehiclesWithImages = await Promise.all(
+        vehicles.map(async (vehicle) => {
+          const entryLog = await ParkingLog.findOne({
+            licensePlate: vehicle.licensePlate,
+            eventType: 'entry',
+            timestamp: { $gte: todayStart, $lte: todayEnd }
+          }).sort({ timestamp: -1 })
+
+          let exitLog = null
+          if (vehicle.exitTime) {
+            exitLog = await ParkingLog.findOne({
+              licensePlate: vehicle.licensePlate,
+              eventType: 'exit',
+              timestamp: { $gte: todayStart, $lte: todayEnd }
+            }).sort({ timestamp: -1 })
+          }
+
+          return {
+            ...vehicle.toJSON(),
+            entryImagePath: entryLog?.imageUrl || null,
+            exitImagePath: exitLog?.imageUrl || null
+          }
+        })
+      )
+
+      return vehiclesWithImages
+    } catch (error) {
+      throw new Error(`Lỗi khi lấy lịch sử xe trong ngày với ảnh: ${error.message}`)
     }
   },
 

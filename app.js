@@ -1,9 +1,11 @@
 const express = require('express')
+const cors = require('cors')
 const mongoose = require('mongoose')
 const config = require('./utils/config')
 const logger = require('./utils/logger')
 const middleware = require('./utils/middleware')
 const vehicleRouter = require('./controller/vehicle')
+const parkingLogRouter = require('./controller/parkingLog')
 
 const app = express()
 
@@ -18,11 +20,16 @@ mongoose
     logger.error('error connection to MongoDB:', error.message)
   })
 
+// CORS configuration - cho phép frontend gọi API
+app.use(cors())
+
 app.use(express.static('dist'))
+app.use(express.static('public')) // Serve static files (hình ảnh)
 app.use(express.json())
 app.use(middleware.requestLogger)
 
 app.use('/api/vehicle', vehicleRouter)
+app.use('/api/parking-log', parkingLogRouter)
 
 app.use(middleware.unknownEndpoint)
 app.use(middleware.errorHandler)

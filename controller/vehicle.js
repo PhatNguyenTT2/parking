@@ -71,7 +71,7 @@ vehicleRouter.post('/exit', async (request, response, next) => {
  */
 vehicleRouter.get('/inside', async (request, response, next) => {
   try {
-    const carsInside = await vehicleService.getCarsInside()
+    const carsInside = await vehicleService.getCarsInsideWithImages()
     response.json({
       total: carsInside.length,
       vehicles: carsInside
@@ -90,7 +90,7 @@ vehicleRouter.get('/history/today', async (request, response, next) => {
     const { date } = request.query
     const targetDate = date ? new Date(date) : new Date()
 
-    const history = await vehicleService.getTodayHistory(targetDate)
+    const history = await vehicleService.getTodayHistoryWithImages(targetDate)
     response.json({
       date: targetDate.toISOString().split('T')[0],
       total: history.length,
@@ -108,7 +108,7 @@ vehicleRouter.get('/history/today', async (request, response, next) => {
 vehicleRouter.get('/:licensePlate', async (request, response, next) => {
   try {
     const { licensePlate } = request.params
-    const vehicle = await vehicleService.findVehicle(licensePlate.toUpperCase())
+    const vehicle = await vehicleService.getVehicleWithImages(licensePlate.toUpperCase())
 
     if (!vehicle) {
       return response.status(404).json({
