@@ -31,7 +31,7 @@ parkingLogSchema.index({ timestamp: -1 })
 parkingLogSchema.index({ cardId: 1 })
 
 // Compound index để truy vấn theo biển số và loại event
-parkingLogSchema.index({ licensePlate: 1, eventType: 1, timestamp: -1 })
+parkingLogSchema.index({ licensePlate: 1, cardId: 1, timestamp: -1 })
 
 parkingLogSchema.set('toJSON', {
   transform: (document, returnedObject) => {
