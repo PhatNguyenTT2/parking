@@ -4,8 +4,7 @@ const mongoose = require('mongoose')
 const config = require('./utils/config')
 const logger = require('./utils/logger')
 const middleware = require('./utils/middleware')
-const vehicleRouter = require('./controller/vehicle')
-const parkingLogRouter = require('./controller/parkingLog')
+const parkingLogRouter = require('./controller/parkingLogs')
 
 const app = express()
 
@@ -28,8 +27,7 @@ app.use(express.static('public')) // Serve static files (hình ảnh)
 app.use(express.json())
 app.use(middleware.requestLogger)
 
-app.use('/api/vehicle', vehicleRouter)
-app.use('/api/parking-log', parkingLogRouter)
+app.use('/api/parking/logs', parkingLogRouter)
 
 app.use(middleware.unknownEndpoint)
 app.use(middleware.errorHandler)

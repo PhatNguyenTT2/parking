@@ -1,67 +1,69 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import { getCarsInside, getTodayHistory } from '../services/vehicleApi';
+import parkingLogService from '../services/parkingLogService';
 import Header from './components/Header';
 import EntryLane from './components/EntryLane';
 import ExitLane from './components/ExitLane';
 
 function App() {
-  const [carsInside, setCarsInside] = useState([]);
-  const [todayHistory, setTodayHistory] = useState([]);
+  const [currentParking, setCurrentParking] = useState([]);
+  const [todayLogs, setTodayLogs] = useState([]);
   const [latestEntry, setLatestEntry] = useState(null);
-  const [latestExit, setLatestExit] = useState(null);
 
-  // Fetch data mỗi 3 giây
+  // Fetch data
+  const fetchData = async () => {
+    try {
+      // Get current parking (vehicles in parking lot)
+      const currentData = await parkingLogService.getCurrentParking();
+
+      // Get today's logs
+      const todayData = await parkingLogService.getTodayLogs();
+
+      console.log('App - currentData:', currentData);
+      console.log('App - todayData:', todayData);
+
+      const currentLogs = currentData.data?.parkingLogs || [];
+      const todayLogsData = todayData.data?.parkingLogs || [];
+
+      setCurrentParking(currentLogs);
+      setTodayLogs(todayLogsData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  // Auto-update latestEntry when todayLogs changes
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const insideData = await getCarsInside();
-        const historyData = await getTodayHistory();
+    if (todayLogs.length > 0) {
+      setLatestEntry(todayLogs[0]);
+    } else {
+      setLatestEntry(null);
+    }
+  }, [todayLogs]);
 
-        console.log('App - insideData:', insideData);
-        console.log('App - historyData:', historyData);
-
-        setCarsInside(insideData.vehicles || []);
-        setTodayHistory(historyData.vehicles || []);
-
-        // Lấy xe vào gần nhất
-        const recentEntries = (historyData.vehicles || []).filter(v => v.status === 'in');
-        if (recentEntries.length > 0) {
-          setLatestEntry(recentEntries[0]);
-        }
-
-        // Lấy xe ra gần nhất
-        const recentExits = (historyData.vehicles || []).filter(v => v.status === 'out');
-        if (recentExits.length > 0) {
-          setLatestExit(recentExits[0]);
-          console.log('App - Latest exit vehicle:', recentExits[0]);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
+  useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header
-        totalInside={carsInside.length}
-        todayTotal={todayHistory.length}
+        totalInside={currentParking.length}
+        todayTotal={todayLogs.length}
       />
 
-      <div className="grid grid-cols-2 gap-6 p-6 h-[calc(100vh-100px)]">
-        <EntryLane
-          latestEntry={latestEntry}
-          recentEntries={(todayHistory || []).filter(v => v.status === 'in').slice(0, 5)}
-        />
+      <div className="flex-1 overflow-auto">
+        <div className="grid grid-cols-2 gap-6 p-6 min-h-full">
+          <EntryLane
+            latestEntry={latestEntry}
+            recentEntries={todayLogs.slice(0, 5)}
+            onEntryAdded={fetchData}
+          />
 
-        <ExitLane
-          latestExit={latestExit}
-        />
+          <ExitLane
+            onExitProcessed={fetchData}
+          />
+        </div>
       </div>
     </div>
   );

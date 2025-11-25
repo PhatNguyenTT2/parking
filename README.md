@@ -1,176 +1,170 @@
-Bước số 5 trong kế hoạch thực hiện dự án của nhóm SoCiety được xác định là "Thiết kế database (MongoDB), xây dựng chương trình quản lý xe ra/vào" với thời hạn 2 tuần. Dưới đây là phân tích chi tiết về các khía cạnh khác nhau của bước này.
+# Hệ Thống Quản Lý Bãi Đỗ Xe Thông Minh
 
-Mục Tiêu Và Kết Quả Mong Muốn
-Kết quả chính của bước 5 là đạt được "Lưu trữ - truy xuất dữ liệu biển số, thời gian ổn định". Điều này có nghĩa hệ thống MongoDB phải hoạt động một cách tin cậy và hiệu quả để lưu trữ và quản lý thông tin về các xe vào và xe ra.​
+## Tổng Quan
+Hệ thống quản lý bãi đỗ xe tự động sử dụng Raspberry Pi, camera OCR và cảm biến RFID để kiểm soát luồng xe ra vào.
 
-Data Input (Dữ Liệu Đầu Vào)
-Dữ liệu đầu vào cho bước 5 bao gồm:
+## Cấu Trúc Dữ Liệu
 
-Từ bước 4 (Tích hợp OCR):
+### ParkingLog Model
+**Mục đích**: Ghi nhận lịch sử xe vào bãi (entry log only)
 
-Biển số xe được nhận diện và trích xuất thành ký tự từ hệ thống YOLOv5 + OCR đã kiểm thử thành công
+**Lưu ý**: Model này chỉ lưu thông tin khi xe **vào**, không lưu thông tin xe ra. Khi xe ra, hệ thống sẽ:
+- Tìm record theo `cardId`
+- So sánh biển số
+- Tính thời gian đỗ
+- Xóa/đánh dấu record đã xử lý
 
-Thông tin biển số phải ở dạng chuỗi ký tự (text) chính xác
+- **licensePlate**: Biển số xe (bắt buộc, tự động chuyển thành chữ hoa)
+- **entryTime**: Thời gian xe vào (bắt buộc, mặc định là thời điểm hiện tại)
+- **cardId**: ID thẻ xe/RFID (bắt buộc)
+- **image**: Ảnh chụp xe khi vào (tùy chọn)
 
-Thông tin bổ sung:
+## Workflow Hệ Thống
 
-Thời gian khi xe vào/ra (timestamp)
+### 1. Luồng Xe Vào (Entry Lane)
+**Thiết bị**: Raspberry Pi + Camera + RFID Reader
 
-Loại xe (xác định từ biển số hoặc input thủ công)
+**Quy trình**:
+1. Xe đến cổng vào
+2. Camera chụp ảnh xe
+3. OCR nhận diện biển số xe
+4. RFID Reader đọc ID thẻ xe
+5. Ghi nhận thời gian vào
+6. Lưu dữ liệu vào MongoDB (licensePlate, entryTime, cardId, image)
+7. Mở cổng cho xe vào
 
-Camera ID hoặc điểm vào/ra (để phân biệt xe vào hay xe ra)
+### 2. Luồng Xe Ra (Exit Lane)
+**Thiết bị**: Raspberry Pi + Camera + RFID Reader
 
-Hình ảnh gốc của biển số (tùy chọn, để audit/verify sau)
+**Quy trình**:
+1. Xe đến cổng ra
+2. RFID Reader đọc ID thẻ xe
+3. Camera chụp ảnh xe ra
+4. OCR nhận diện biển số xe ra
+5. Ghi nhận thời gian ra (tự động khi bắt đầu xử lý)
+6. Gửi dữ liệu lên hệ thống: `cardId`, `exitLicensePlate`, `exitImage`, `exitTime`
 
-Data Output (Dữ Liệu Đầu Ra)
-Dữ liệu đầu ra mà MongoDB cần tạo ra gồm:
+**Kiểm tra**:
+- Tra cứu database theo `cardId`
+- So sánh biển số xe vào (từ database) với biển số xe ra (từ OCR)
+- **Nếu khớp**: 
+  - Tính toán thời gian đỗ (exitTime - entryTime)
+  - Hiển thị đối chiếu hình ảnh vào/ra
+  - Mở cổng cho xe ra
+  - Xóa record trong database
+  - Hiển thị thông tin: biển số, thẻ, thời gian vào/ra, thời lượng đỗ
+- **Nếu không khớp**: 
+  - Cảnh báo biển số không khớp (hiển thị cả 2 biển số)
+  - Hiển thị hình ảnh xe ra để kiểm tra
+  - Không mở cổng
+  - Ghi log sự cố
 
-Hồ sơ xe ra/vào:
+**Dữ liệu đầu vào (từ Raspberry Pi)**:
+- `cardId`: ID thẻ từ RFID Reader (bắt buộc)
+- `exitLicensePlate`: Biển số xe từ OCR (bắt buộc)
+- `exitImage`: URL hình ảnh xe ra (tùy chọn)
+- `exitTime`: Thời gian ra (tự động tạo khi xử lý)
 
-Biển số xe
+### 3. Tính Toán Thời Gian Đỗ
+```
+Thời gian đỗ = Thời gian ra - entryTime (từ database)
+```
 
-Thời gian vào
+## Công Nghệ Sử dụng
 
-Thời gian ra
+### Backend
+- **Node.js + Express**: API server
+- **MongoDB + Mongoose**: Database
+- **Socket.io**: Real-time communication (nếu cần)
 
-Trạng thái (đang ở trong bãi / đã ra)
+### Frontend
+- **React + Vite**: Giao diện quản lý
+- **TailwindCSS**: Styling
 
-Khoảng thời gian lưu trú
+### Raspberry Pi
+- **Python**: Xử lý camera và GPIO
+- **OpenCV**: Xử lý hình ảnh
+- **OCR**: Nhận diện biển số
+- **MFRC522/RC522**: RFID Reader
 
-Báo cáo và truy vấn:
+## Cấu Trúc Thư Mục
+```
+parking/
+├── controller/        # API controllers
+├── model/            # MongoDB models
+├── frontend/         # React frontend
+├── raspberry-pi/     # Python scripts cho Raspberry Pi
+│   ├── camera_ocr_service.py  # Xử lý camera và OCR
+│   ├── gpio_control.py        # Điều khiển GPIO/cổng
+│   └── main.py               # Script chính
+└── utils/           # Utilities và middleware
+```
 
-Danh sách xe hiện đang ở trong bãi
+## API Endpoints (Dự Kiến)
 
-Lịch sử xe ra/vào trong ngày
+### Entry
+- `POST /api/parking/entry` - Ghi nhận xe vào
+  - Body: `{ licensePlate, cardId, image, entryTime }`
 
-Thống kê lưu lượng theo giờ
+### Exit
+- **Frontend Service: `processExit(cardId, exitLicensePlate)`**
+  - Tìm xe theo `cardId`
+  - Validate biển số khớp
+  - Xóa record nếu hợp lệ
+  - Input bổ sung: `exitImage` (URL), `exitTime` (auto-generated)
+  - Response: Thông tin xe vào/ra, thời gian đỗ, trạng thái, hình ảnh đối chiếu
 
-Xác thực xe (kiểm tra biển số khi ra có khớp với khi vào không)
+### Query
+- `GET /api/parking/logs` - Lấy danh sách log
+- `GET /api/parking/current` - Xe đang đỗ
+- `GET /api/parking/card/:cardId` - Tra cứu theo thẻ
 
-Cấu Trúc MongoDB
-Để đáp ứng nhu cầu này, bạn nên thiết kế một hoặc nhiều collection như sau:
+## Yêu Cầu Cài Đặt
 
-Collection 1: vehicles (Hồ sơ xe)
+### Backend
+```bash
+npm install
+```
 
-javascript
-{
-  _id: ObjectId,
-  licensePlate: "String",        // Biển số (unique)
-  entryTime: ISODate,           // Thời gian vào
-  exitTime: ISODate,            // Thời gian ra (null nếu chưa ra)
-  status: "in" | "out",         // Trạng thái hiện tại
-  entryImagePath: "String",     // Đường dẫn ảnh vào
-  exitImagePath: "String",      // Đường dẫn ảnh ra
-  duration: Number,             // Thời gian lưu trú (phút)
-  createdAt: ISODate,
-  updatedAt: ISODate
-}
-Collection 2: parkingLogs (Lịch sử chi tiết)
+### Frontend
+```bash
+cd frontend
+npm install
+```
 
-javascript
-{
-  _id: ObjectId,
-  licensePlate: "String",
-  eventType: "entry" | "exit",
-  timestamp: ISODate,
-  cameraId: "String",
-  imageUrl: "String",
-  confidence: Number,           // Độ chính xác nhận diện (0-1)
-  ocrConfidence: Number,        // Độ chính xác OCR
-  createdAt: ISODate
-}
-Cách Sử Dụng MongoDB
-1. Khi xe vào (Entry):
+### Raspberry Pi
+```bash
+pip install opencv-python pytesseract mfrc522
+```
 
-javascript
-// Tìm kiếm xem biển số này đã có trong database chưa
-const existingVehicle = await collection.findOne({ licensePlate: plateNumber });
+## Chạy Ứng Dụng
 
-if (existingVehicle && existingVehicle.status === "in") {
-  // Cảnh báo: xe đã trong bãi
-} else {
-  // Tạo hồ sơ xe mới hoặc cập nhật
-  await collection.insertOne({
-    licensePlate: plateNumber,
-    entryTime: new Date(),
-    exitTime: null,
-    status: "in",
-    entryImagePath: imagePath
-  });
-}
-2. Khi xe ra (Exit):
+### Backend
+```bash
+npm start
+```
 
-javascript
-// Tìm kiếm hồ sơ xe vào
-const vehicle = await collection.findOne({ 
-  licensePlate: plateNumber, 
-  status: "in" 
-});
+### Frontend
+```bash
+cd frontend
+npm run dev
+```
 
-if (vehicle) {
-  // Cập nhật thời gian ra và trạng thái
-  const duration = (new Date() - vehicle.entryTime) / 60000; // phút
-  
-  await collection.updateOne(
-    { _id: vehicle._id },
-    {
-      $set: {
-        exitTime: new Date(),
-        status: "out",
-        duration: duration,
-        exitImagePath: imagePath
-      }
-    }
-  );
-  
-  // Cho phép mở barrier
-  return { allowed: true, message: "Vehicle can exit" };
-} else {
-  // Cảnh báo: không tìm thấy hồ sơ vào
-  return { allowed: false, message: "No entry record found" };
-}
-3. Truy vấn thông tin:
+### Raspberry Pi
+```bash
+cd raspberry-pi
+python main.py
+```
 
-javascript
-// Xe hiện đang ở trong bãi
-const carsInside = await collection.find({ status: "in" }).toArray();
+## Lưu Ý Bảo Mật
+- Xác thực thẻ RFID trước khi xử lý
+- Log tất cả các sự cố (biển số không khớp)
+- Backup database định kỳ
+- Mã hóa dữ liệu nhạy cảm nếu cần
 
-// Lịch sử xe trong ngày
-const todayStart = new Date().setHours(0, 0, 0, 0);
-const history = await collection.find({ 
-  entryTime: { $gte: new Date(todayStart) } 
-}).toArray();
-
-// Tìm xe cụ thể
-const vehicleInfo = await collection.findOne({ licensePlate: "ABC12345" });
-Tích Hợp Với Các Bước Khác
-Liên kết với bước 4 (OCR): MongoDB nhận biển số đã xác thực từ YOLOv5 + OCR, đảm bảo dữ liệu đầu vào chính xác trước khi lưu.
-
-Chuẩn bị cho bước 6 (SoC integration): Hệ thống MongoDB được xây dựng độc lập, có thể truy cập từ Raspberry Pi 4 thông qua:
-
-Remote MongoDB Atlas (cloud-based) - dễ truy cập từ bất kỳ nơi nào
-
-Local MongoDB trên Raspberry Pi - tối ưu hóa độ trễ nhưng cần cài đặt phần mềm
-
-Các Kỹ Năng Và Công Cụ Cần Thiết
-MongoDB fundamentals: Insert, Find, Update, Delete (CRUD operations)
-
-Node.js/Express API: Xây dựng API endpoints để quản lý dữ liệu
-
-Mongoose ODM (optional): Giúp định nghĩa schema một cách rõ ràng
-
-Indexing: Tạo index cho licensePlate để tăng tốc độ truy vấn
-
-Authentication: Nếu dùng MongoDB Atlas, cần thiết lập user/password
-
-Thách Thức Tiềm Ẩn
-Conflict resolution: Xử lý trường hợp biển số bị nhận diện sai
-
-Duplicate handling: Nếu cùng một xe vào 2 lần trong ngày
-
-Timestamp synchronization: Đảm bảo thời gian server và các thiết bị đều chính xác
-
-Connection stability: Đảm bảo kết nối MongoDB ổn định khi tích hợp lên Raspberry Pi
-
-Bước 5 này là nền tảng dữ liệu quan trọng cho toàn bộ hệ thống, vì vậy cần đảm bảo thiết kế schema tốt, các index hiệu quả, và xử lý lỗi toàn diện.
-
+## Tính Năng Mở Rộng (Future)
+- [ ] Tính phí đỗ xe tự động
+- [ ] Thông báo qua email/SMS
+- [ ] Dashboard analytics
+- [ ] API webhook cho hệ thống bên ngoài
+- [ ] Multi-language support

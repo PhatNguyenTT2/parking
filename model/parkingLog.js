@@ -7,7 +7,7 @@ const parkingLogSchema = new mongoose.Schema({
     trim: true,
     uppercase: true
   },
-  timestamp: {
+  entryTime: {
     type: Date,
     required: true,
     default: Date.now
@@ -20,18 +20,18 @@ const parkingLogSchema = new mongoose.Schema({
   image: {
     type: String,
     default: null
-  },
+  }
 }, {
-  timestamps: { createdAt: true, updatedAt: false } // Chỉ cần createdAt
+  timestamps: { createdAt: true, updatedAt: true }
 })
 
 // Index để tăng tốc độ truy vấn
 parkingLogSchema.index({ licensePlate: 1 })
-parkingLogSchema.index({ timestamp: -1 })
+parkingLogSchema.index({ entryTime: -1 })
 parkingLogSchema.index({ cardId: 1 })
 
-// Compound index để truy vấn theo biển số và loại event
-parkingLogSchema.index({ licensePlate: 1, cardId: 1, timestamp: -1 })
+// Compound index để truy vấn theo biển số và thời gian vào
+parkingLogSchema.index({ licensePlate: 1, cardId: 1, entryTime: -1 })
 
 parkingLogSchema.set('toJSON', {
   transform: (document, returnedObject) => {
