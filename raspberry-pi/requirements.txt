@@ -1,0 +1,21 @@
+# Raspberry Pi Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Computer Vision & OCR
+opencv-python>=4.8.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# RFID Reader (MFRC522)
+mfrc522>=0.0.7
+spidev>=3.6
+
+# GPIO Control (Raspberry Pi only)
+RPi.GPIO>=0.7.1
+
+# Optional: For better performance
+numpy>=1.24.0

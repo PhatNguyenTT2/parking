@@ -1,350 +1,401 @@
-# Hướng dẫn triển khai lên Raspberry Pi 4
+# 🚗 Raspberry Pi - Smart Parking System
 
-## Yêu cầu phần cứng
+Hệ thống điều khiển cổng vào/ra bãi đỗ xe thông minh sử dụng Raspberry Pi, Camera OCR và RFID Reader.
 
-### 1. Raspberry Pi 4
-- **Model**: Raspberry Pi 4 Model B
-- **RAM**: 4GB hoặc 8GB (khuyến nghị)
-- **Storage**: Thẻ SD 64GB hoặc SSD USB 3.0
-- **OS**: Raspberry Pi OS 64-bit (Debian Bullseye)
+## 📋 Tổng Quan
 
-### 2. Camera
-- **Option 1**: Raspberry Pi Camera Module v2 (8MP)
-- **Option 2**: USB Webcam (HD 720p trở lên)
-- **Số lượng**: 2 camera (1 cho vào, 1 cho ra)
+Dự án này cung cấp giải pháp hoàn chỉnh để tự động hóa việc quản lý xe ra vào bãi đỗ:
 
-### 3. Relay Module
-- **Loại**: 2-Channel 5V Relay Module
-- **Mục đích**: Điều khiển barrier (cổng) vào/ra
+- ✅ **Entry Lane**: Quét thẻ RFID → Chụp ảnh xe → Nhận diện biển số → Lưu vào database → Mở cổng
+- ✅ **Exit Lane**: Quét thẻ RFID → Tìm thông tin xe → So sánh biển số → Xóa record → Mở cổng
+- ✅ **Offline Mode**: Queue requests khi mất kết nối với backend
+- ✅ **Visual Feedback**: LED và buzzer để thông báo trạng thái
+- ✅ **Simulation Mode**: Chạy được trên máy tính để test (không cần phần cứng)
 
-### 4. LED và nút nhấn
-- **LED xanh**: Báo cho phép vào
-- **LED đỏ**: Báo từ chối
-- **Nút nhấn**: Trigger thủ công (optional)
-
-### 5. Barrier (Cổng)
-- **Loại**: Servo motor barrier hoặc motor DC 12V
-- **Nguồn**: Adapter 12V 2A
-
-## Sơ đồ kết nối
+## 🏗️ Kiến Trúc Hệ Thống
 
 ```
-Raspberry Pi 4
-├── GPIO 17 → Relay CH1 → Barrier Entry
-├── GPIO 27 → Relay CH2 → Barrier Exit
-├── GPIO 22 → LED Green (220Ω resistor)
-├── GPIO 23 → LED Red (220Ω resistor)
-├── Camera 1 → CSI Port → Entry Camera
-└── Camera 2 → USB Port → Exit Camera
+raspberry-pi/
+├── config/               # Cấu hình
+│   ├── settings.py      # Cấu hình chung (API, timeout, v.v.)
+│   └── pins.py          # GPIO pin mappings
+├── services/            # Business logic
+│   ├── rfid_service.py  # Xử lý RFID Reader
+│   ├── camera_service.py# Xử lý Camera + OCR
+│   ├── api_service.py   # Giao tiếp với Backend API
+│   └── gpio_service.py  # Điều khiển GPIO (gate, LED, buzzer)
+├── utils/               # Utilities
+│   ├── logger.py        # Logging
+│   ├── validators.py    # Data validation
+│   └── queue_manager.py # Offline request queue
+├── entry_lane.py        # Script chính cho cổng VÀO
+├── exit_lane.py         # Script chính cho cổng RA
+├── requirements.txt     # Python dependencies
+└── .env.example         # Environment variables template
 ```
 
-## Cài đặt môi trường
+## 🔧 Phần Cứng Cần Thiết
 
-### 1. Update system
+### Entry Lane / Exit Lane (mỗi cổng)
+- 1x Raspberry Pi (3B+, 4, hoặc Zero W)
+- 1x Camera Module hoặc USB Camera
+- 1x MFRC522 RFID Reader
+- 1x Servo Motor (SG90 hoặc tương tự)
+- 2x LED (Green + Red)
+- 1x Buzzer
+- Dây nối, breadboard, nguồn điện
+
+### Kết Nối GPIO
+
+Xem chi tiết trong file `config/pins.py`:
+
+```python
+# Entry Lane
+ENTRY_GATE_PIN = 17      # Servo motor
+ENTRY_GREEN_LED = 27     # LED xanh
+ENTRY_RED_LED = 22       # LED đỏ
+ENTRY_BUZZER = 23        # Buzzer
+
+# Exit Lane
+EXIT_GATE_PIN = 18       # Servo motor
+EXIT_GREEN_LED = 24      # LED xanh
+EXIT_RED_LED = 25        # LED đỏ
+EXIT_BUZZER = 8          # Buzzer
+
+# RFID (SPI)
+RFID_RST_PIN = 25
+```
+
+## 📦 Cài Đặt
+
+### 1. Chuẩn Bị Raspberry Pi
+
 ```bash
-sudo apt update && sudo apt upgrade -y
-sudo reboot
+# Cập nhật hệ thống
+sudo apt update
+sudo apt upgrade -y
+
+# Cài đặt Python 3 và pip
+sudo apt install python3 python3-pip -y
+
+# Cài đặt Tesseract OCR
+sudo apt install tesseract-ocr -y
+sudo apt install tesseract-ocr-vie -y  # Vietnamese language pack
+
+# Enable SPI (cho RFID Reader)
+sudo raspi-config
+# Interface Options -> SPI -> Enable
 ```
 
-### 2. Cài Node.js
+### 2. Clone Repository
+
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-node --version  # Verify v18+
+cd ~
+git clone <repository-url>
+cd parking/raspberry-pi
 ```
 
-### 3. Cài MongoDB
-**Option A: MongoDB Local (nặng hơn)**
+### 3. Cài Đặt Dependencies
+
 ```bash
-# Raspberry Pi OS không hỗ trợ MongoDB chính thức
-# Khuyến nghị dùng MongoDB Atlas (cloud)
+# Tạo virtual environment (khuyến nghị)
+python3 -m venv venv
+source venv/bin/activate
+
+# Cài đặt packages
+pip install -r requirements.txt
 ```
 
-**Option B: MongoDB Atlas (khuyến nghị)**
-- Tạo free cluster tại https://cloud.mongodb.com
-- Lấy connection string
-- Update file `.env`
+### 4. Cấu Hình
 
-### 4. Cài Python dependencies
 ```bash
-sudo apt install -y python3-pip python3-opencv tesseract-ocr
-pip3 install opencv-python pytesseract pillow requests RPi.GPIO
-```
+# Copy file .env mẫu
+cp .env.example .env
 
-### 5. Cài YOLOv5 (optional, nếu muốn detect biển số)
-```bash
-pip3 install torch torchvision
-git clone https://github.com/ultralytics/yolov5
-cd yolov5
-pip3 install -r requirements.txt
-```
-
-## Deploy Backend
-
-### 1. Copy project vào Raspberry Pi
-```bash
-# Từ máy PC
-scp -r parking pi@raspberrypi.local:/home/pi/
-
-# Hoặc clone từ Git
-ssh pi@raspberrypi.local
-cd /home/pi
-git clone <your-repo-url> parking
-cd parking
-```
-
-### 2. Cài dependencies và build
-```bash
-# Backend
-npm install
-
-# Frontend
-cd frontend
-npm install
-npm run build
-cd ..
-```
-
-### 3. Tạo file .env
-```bash
+# Chỉnh sửa cấu hình
 nano .env
 ```
 
-Nội dung:
-```env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/parking
-PORT=3001
-NODE_ENV=production
+Cấu hình `.env`:
+```bash
+# URL của Backend API
+BACKEND_URL=http://192.168.1.100:3001/api/parking/logs
+
+# Loại lane: 'entry' hoặc 'exit'
+LANE_TYPE=entry
+
+# ID của lane (để phân biệt nếu có nhiều cổng)
+LANE_ID=lane_1
+
+# Log level: DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL=INFO
 ```
 
-### 4. Tạo systemd service
+## 🚀 Chạy Hệ Thống
+
+### Entry Lane (Cổng Vào)
+
 ```bash
-sudo nano /etc/systemd/system/parking-backend.service
+cd ~/parking/raspberry-pi
+python3 entry_lane.py
+```
+
+Quy trình:
+1. 🔍 Chờ quét thẻ RFID
+2. 📸 Chụp ảnh xe
+3. 🔤 Nhận diện biển số bằng OCR
+4. 📡 Gửi dữ liệu lên backend
+5. ✅ Nếu thành công: LED xanh + Beep + Mở cổng (5s)
+6. ❌ Nếu thất bại: LED đỏ nhấp nháy + Beep 3 lần
+
+### Exit Lane (Cổng Ra)
+
+```bash
+cd ~/parking/raspberry-pi
+python3 exit_lane.py
+```
+
+Quy trình:
+1. 🔍 Chờ quét thẻ RFID
+2. 🔎 Tìm thông tin xe trong database (theo cardId)
+3. 📸 Chụp ảnh xe ra
+4. 🔤 Nhận diện biển số
+5. ⚖️ So sánh biển số vào/ra
+6. ✅ Nếu khớp: Xóa record + LED xanh + Mở cổng
+7. ❌ Nếu không khớp: LED đỏ + Không mở cổng
+
+### Chạy Background (Tự động khởi động)
+
+Tạo systemd service:
+
+```bash
+# Tạo service file cho Entry Lane
+sudo nano /etc/systemd/system/parking-entry.service
 ```
 
 Nội dung:
 ```ini
 [Unit]
-Description=Parking Management Backend
+Description=Parking Entry Lane Service
 After=network.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/parking
-ExecStart=/usr/bin/node /home/pi/parking/index.js
-Restart=on-failure
-Environment=NODE_ENV=production
+WorkingDirectory=/home/pi/parking/raspberry-pi
+ExecStart=/home/pi/parking/raspberry-pi/venv/bin/python3 entry_lane.py
+Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-```bash
-# Enable và start service
-sudo systemctl daemon-reload
-sudo systemctl enable parking-backend
-sudo systemctl start parking-backend
-sudo systemctl status parking-backend
-
-# Xem logs
-sudo journalctl -u parking-backend -f
-```
-
-## Deploy Camera và GPIO Service
-
-### 1. Copy scripts
-```bash
-cp raspberry-pi/*.py /home/pi/parking/
-cd /home/pi/parking
-```
-
-### 2. Test GPIO
-```bash
-sudo python3 gpio_control.py
-# Sẽ test mở/đóng barrier và LED
-```
-
-### 3. Test Camera
-```bash
-python3 camera_ocr_service.py
-# Sẽ chụp ảnh và detect biển số mỗi 10 giây
-```
-
-### 4. Tạo systemd service cho camera
-```bash
-sudo nano /etc/systemd/system/parking-camera.service
-```
-
-Nội dung:
-```ini
-[Unit]
-Description=Parking Camera OCR Service
-After=parking-backend.service
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/parking
-ExecStart=/usr/bin/python3 /home/pi/parking/camera_ocr_service.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
+Kích hoạt service:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable parking-camera
-sudo systemctl start parking-camera
-sudo systemctl status parking-camera
+sudo systemctl enable parking-entry.service
+sudo systemctl start parking-entry.service
+
+# Xem log
+sudo journalctl -u parking-entry.service -f
 ```
 
-## Truy cập giao diện
+## 🧪 Testing & Simulation
 
-### 1. Từ cùng mạng local
-```
-http://raspberrypi.local:3001
-```
+Hệ thống hỗ trợ **Simulation Mode** để test trên máy tính (không cần phần cứng):
 
-### 2. Từ ngoài mạng (cần port forwarding)
-- Port forward router: 3001 → Raspberry Pi IP
-- Hoặc dùng ngrok: `ngrok http 3001`
-
-## Tối ưu hóa hiệu suất
-
-### 1. Overclock Raspberry Pi (cẩn thận!)
 ```bash
-sudo nano /boot/config.txt
-```
-Thêm:
-```
-over_voltage=6
-arm_freq=2000
-gpu_freq=750
+# Chạy trên Windows/Mac/Linux
+python entry_lane.py
 ```
 
-### 2. Tăng swap memory
-```bash
-sudo dphys-swapfile swapoff
-sudo nano /etc/dphys-swapfile
-# CONF_SWAPSIZE=2048
-sudo dphys-swapfile setup
-sudo dphys-swapfile swapon
+Simulation Mode tự động kích hoạt khi:
+- Không có RFID Reader → Sử dụng card ID giả: `1234567890`
+- Không có Camera → Tạo ảnh dummy
+- Không có OCR → Trả về biển số giả: `29A12345`
+- Không có GPIO → Log thông báo thay vì điều khiển phần cứng
+
+## 📊 Logging
+
+Logs được lưu tại `logs/`:
+```
+logs/
+├── services.rfid_service.log
+├── services.camera_service.log
+├── services.api_service.log
+├── services.gpio_service.log
+├── __main__.log
 ```
 
-### 3. Disable desktop (chạy headless)
+Log format:
+```
+2025-11-25 14:30:45 | INFO     | services.rfid_service | ✅ Card detected: 1234567890
+2025-11-25 14:30:47 | INFO     | services.camera_service | ✅ Image captured successfully
+2025-11-25 14:30:48 | INFO     | services.camera_service | ✅ Valid license plate detected: 29A12345
+2025-11-25 14:30:49 | INFO     | services.api_service | ✅ API request successful: 201
+```
+
+## 🔄 Offline Mode
+
+Khi mất kết nối với backend, hệ thống tự động:
+1. ✅ Queue requests vào file `data/offline_queue.json`
+2. ⏳ Retry định kỳ khi có kết nối
+3. 🔄 Xử lý hàng đợi khi khởi động
+
+Cấu hình trong `config/settings.py`:
+```python
+ENABLE_OFFLINE_QUEUE = True
+QUEUE_MAX_SIZE = 100
+```
+
+## 🛠️ Troubleshooting
+
+### Lỗi RFID Reader không hoạt động
 ```bash
+# Kiểm tra SPI đã enable
+lsmod | grep spi
+
+# Nếu chưa có, enable SPI
 sudo raspi-config
-# System Options → Boot → Console
-```
-
-### 4. Sử dụng SSD thay vì SD card
-- Boot từ USB SSD nhanh hơn nhiều
-- Tuổi thọ cao hơn
-
-## Monitoring và Debugging
-
-### 1. Xem logs realtime
-```bash
-# Backend
-sudo journalctl -u parking-backend -f
-
-# Camera service
-sudo journalctl -u parking-camera -f
-
-# System logs
-tail -f /var/log/syslog
-```
-
-### 2. Kiểm tra CPU/RAM usage
-```bash
-htop
-```
-
-### 3. Test API
-```bash
-# Từ Raspberry Pi
-curl http://localhost:3001/api/vehicle/inside
-
-# Từ máy khác
-curl http://raspberrypi.local:3001/api/vehicle/inside
-```
-
-## Troubleshooting
-
-### Lỗi: Camera not found
-```bash
-# Enable camera
-sudo raspi-config
-# Interface Options → Camera → Enable
-
-# Reboot
+# Interface Options -> SPI -> Enable
 sudo reboot
 ```
 
-### Lỗi: GPIO permission denied
+### Lỗi Camera không detect
 ```bash
-# Add user to gpio group
+# Test camera
+raspistill -o test.jpg
+
+# Nếu dùng USB camera
+ls /dev/video*
+
+# Đổi camera ID trong config/pins.py
+CAMERA_ID = 0  # Thử 0, 1, 2...
+```
+
+### Lỗi OCR không chính xác
+```bash
+# Cài thêm language pack
+sudo apt install tesseract-ocr-vie
+
+# Kiểm tra version
+tesseract --version
+
+# Test OCR trực tiếp
+tesseract test.jpg output -l vie
+```
+
+### Lỗi GPIO Permission Denied
+```bash
+# Thêm user vào gpio group
 sudo usermod -a -G gpio pi
+
+# Hoặc chạy với sudo (không khuyến nghị)
+sudo python3 entry_lane.py
 ```
 
-### Lỗi: MongoDB connection timeout
-- Kiểm tra internet connection
-- Whitelist IP của Raspberry Pi trong MongoDB Atlas
-- Check firewall
+## 🔧 Customization
 
-### Lỗi: Node.js out of memory
-```bash
-# Tăng heap size
-export NODE_OPTIONS="--max-old-space-size=2048"
+### Thay đổi thời gian mở cổng
+
+`config/settings.py`:
+```python
+GATE_OPEN_DURATION = 5  # seconds (mặc định 5s)
 ```
 
-## Bảo trì
+### Thay đổi GPIO pins
 
-### 1. Auto backup database
-```bash
-# Crontab backup MongoDB hàng ngày
-crontab -e
-```
-Thêm:
-```
-0 2 * * * mongodump --uri="mongodb+srv://..." --out=/home/pi/backups/$(date +\%Y\%m\%d)
+`config/pins.py`:
+```python
+ENTRY_GATE_PIN = 17  # Đổi thành pin khác nếu cần
 ```
 
-### 2. Auto cleanup images cũ
-```bash
-# Xóa ảnh > 30 ngày
-find /home/pi/parking/public/images -type f -mtime +30 -delete
+### Thay đổi OCR confidence threshold
+
+`config/settings.py`:
+```python
+OCR_CONFIDENCE_THRESHOLD = 0.6  # 0.0 - 1.0 (mặc định 0.6 = 60%)
 ```
 
-### 3. Update system định kỳ
-```bash
-sudo apt update && sudo apt upgrade -y
+## 📡 API Backend
+
+Hệ thống giao tiếp với backend qua các endpoint:
+
+### POST /api/parking/logs (Entry)
+```json
+{
+  "licensePlate": "29A12345",
+  "cardId": "1234567890",
+  "image": "/path/to/image.jpg",
+  "entryTime": 1732532400000
+}
 ```
 
-## Chi phí ước tính
+### GET /api/parking/logs?cardId=xxx (Find)
+```json
+{
+  "success": true,
+  "data": {
+    "parkingLogs": [
+      {
+        "id": "abc123",
+        "licensePlate": "29A12345",
+        "cardId": "1234567890",
+        "entryTime": 1732532400000
+      }
+    ]
+  }
+}
+```
 
-| Thành phần | Giá tiền (VNĐ) |
-|------------|----------------|
-| Raspberry Pi 4 (4GB) | 1,500,000 |
-| Camera Module x2 | 600,000 |
-| Relay Module | 50,000 |
-| LED + Resistor + Wires | 100,000 |
-| Barrier Motor x2 | 2,000,000 |
-| Nguồn + Box | 300,000 |
-| **Tổng** | **~4,550,000** |
+### DELETE /api/parking/logs/:id (Exit)
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Parking log deleted",
+    "exitTime": 1732536000000,
+    "duration": 3600000
+  }
+}
+```
 
-## Kết luận
+## 🎯 Tính Năng Nổi Bật
 
-Hệ thống hoàn toàn có thể chạy trên Raspberry Pi 4 với hiệu suất tốt. Key points:
+### ✅ Đã Implement
+- [x] RFID card reading với retry logic
+- [x] Camera capture + OCR license plate recognition
+- [x] License plate validation (Vietnamese format)
+- [x] API integration với retry và error handling
+- [x] Offline mode với request queue
+- [x] GPIO control (servo, LED, buzzer)
+- [x] Visual/Audio feedback
+- [x] Comprehensive logging
+- [x] Simulation mode cho testing
+- [x] Graceful shutdown
 
-✅ Node.js backend nhẹ, chạy mượt  
-✅ React frontend đã build static  
-✅ MongoDB Atlas (cloud) giảm tải cho RPi  
-✅ GPIO control barriers đơn giản  
-✅ Camera + OCR real-time khả thi  
+### 🚧 Có Thể Mở Rộng
+- [ ] Web dashboard cho monitoring
+- [ ] Real-time notifications (WebSocket)
+- [ ] Face recognition bổ sung
+- [ ] Automatic image cleanup (retention policy)
+- [ ] Statistics và analytics
+- [ ] Multiple camera support
+- [ ] License plate correction UI
 
-**Khuyến nghị**: Dùng RPi 4 4GB + SSD + MongoDB Atlas
+## 📝 License
+
+MIT License - Xem file LICENSE để biết thêm chi tiết.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📧 Contact
+
+Nếu có vấn đề hoặc câu hỏi, vui lòng tạo Issue trên GitHub.
+
+---
+
+**Happy Parking! 🚗🅿️**
