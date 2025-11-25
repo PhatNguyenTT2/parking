@@ -6,40 +6,34 @@ import EntryLane from './components/EntryLane';
 import ExitLane from './components/ExitLane';
 
 function App() {
-  const [currentParking, setCurrentParking] = useState([]);
-  const [todayLogs, setTodayLogs] = useState([]);
+  const [allLogs, setAllLogs] = useState([]);
   const [latestEntry, setLatestEntry] = useState(null);
 
   // Fetch data
   const fetchData = async () => {
     try {
-      // Get current parking (vehicles in parking lot)
-      const currentData = await parkingLogService.getCurrentParking();
+      // Get all parking logs (vehicles in parking lot)
+      const allData = await parkingLogService.getCurrentParking();
 
-      // Get today's logs
-      const todayData = await parkingLogService.getTodayLogs();
+      console.log('App - allData:', allData);
 
-      console.log('App - currentData:', currentData);
-      console.log('App - todayData:', todayData);
+      const allLogsData = allData.data?.parkingLogs || [];
 
-      const currentLogs = currentData.data?.parkingLogs || [];
-      const todayLogsData = todayData.data?.parkingLogs || [];
-
-      setCurrentParking(currentLogs);
-      setTodayLogs(todayLogsData);
+      setAllLogs(allLogsData);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
   };
 
-  // Auto-update latestEntry when todayLogs changes
+  // Auto-update latestEntry when allLogs changes
   useEffect(() => {
-    if (todayLogs.length > 0) {
-      setLatestEntry(todayLogs[0]);
+    if (allLogs.length > 0) {
+      // Luôn set xe đầu tiên (mới nhất) làm latestEntry
+      setLatestEntry(allLogs[0]);
     } else {
       setLatestEntry(null);
     }
-  }, [todayLogs]);
+  }, [allLogs]);
 
   useEffect(() => {
     fetchData();
@@ -48,15 +42,15 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header
-        totalInside={currentParking.length}
-        todayTotal={todayLogs.length}
+        totalInside={allLogs.length}
+        todayTotal={allLogs.length}
       />
 
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-2 gap-6 p-6 min-h-full">
           <EntryLane
             latestEntry={latestEntry}
-            recentEntries={todayLogs.slice(0, 5)}
+            allEntries={allLogs}
             onEntryAdded={fetchData}
           />
 

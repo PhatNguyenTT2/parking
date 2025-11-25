@@ -141,7 +141,7 @@ function ExitLane({ onExitProcessed }) {
                 required
                 value={formData.exitLicensePlate}
                 onChange={(e) => setFormData({ ...formData, exitLicensePlate: e.target.value })}
-                placeholder="VD: 59A12345"
+                placeholder="VD: 59A1-2345"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 disabled={isProcessing}
               />
@@ -175,11 +175,10 @@ function ExitLane({ onExitProcessed }) {
             <button
               type="submit"
               disabled={isProcessing}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 text-white py-2 rouont-semibold hover:bg-blue-700 transinded-lg ftion-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isProcessing ? 'Đang xử lý...' : (
                 <>
-                  <LogOut size={18} />
                   Xử Lý Xe Ra
                 </>
               )}

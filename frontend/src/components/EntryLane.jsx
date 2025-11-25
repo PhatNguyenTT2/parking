@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowDownCircle, Clock, Calendar, Bike, Plus, X } from 'lucide-react';
 import parkingLogService from '../../services/parkingLogService';
 
-function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
+function EntryLane({ latestEntry, allEntries, onEntryAdded }) {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     licensePlate: '',
@@ -14,15 +14,28 @@ function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
   const [success, setSuccess] = useState('');
   const [selectedEntry, setSelectedEntry] = useState(null);
 
-  // Always update to latestEntry when a new vehicle enters (latestEntry's _id changes)
+  // Tự động cập nhật selectedEntry khi có xe mới vào (latestEntry thay đổi)
   useEffect(() => {
     if (latestEntry) {
       setSelectedEntry(latestEntry);
     }
-  }, [latestEntry?._id]); // Only depend on _id, not the whole object
+  }, [latestEntry]); // Depend on the whole object to catch all changes
 
-  const handleEntryClick = (entry) => {
-    setSelectedEntry(entry);
+  const handleEntryClick = async (entry) => {
+    try {
+      // Set ngay entry từ list để highlight nhanh (optimistic update)
+      setSelectedEntry(entry);
+
+      // Fetch chi tiết xe theo ID từ server
+      const result = await parkingLogService.getLogById(entry._id || entry.id);
+      if (result.success && result.data) {
+        // Cập nhật với data mới từ server, giữ nguyên _id để highlight đúng
+        setSelectedEntry(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching entry details:', error);
+      // Nếu lỗi thì vẫn giữ entry từ list (đã set ở trên)
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -44,8 +57,14 @@ function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
         // Reset form
         setFormData({ licensePlate: '', cardId: '', image: '' });
         setShowForm(false);
-        // Notify parent to refresh data
-        if (onEntryAdded) onEntryAdded();
+        // Notify parent to refresh data - MUST run to update list
+        if (onEntryAdded) {
+          await onEntryAdded();
+        }
+        // Set the newly created entry as selected
+        if (result.data) {
+          setSelectedEntry(result.data);
+        }
         // Auto-hide success message after 3 seconds
         setTimeout(() => setSuccess(''), 3000);
       }
@@ -117,7 +136,7 @@ function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
                 required
                 value={formData.licensePlate}
                 onChange={(e) => setFormData({ ...formData, licensePlate: e.target.value })}
-                placeholder="VD: 59A12345"
+                placeholder="VD: 59A1-2345"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
@@ -227,16 +246,21 @@ function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
           </div>
         )}
 
-        {/* Recent Entries */}
+        {/* All Parking Logs */}
         <div className="mx-4 mb-4">
           <h3 className="font-semibold mb-3 text-gray-700 flex items-center gap-2">
             <Clock size={18} />
-            Lịch Sử Vào Gần Đây
+            Toàn Bộ Xe Trong Bãi ({allEntries?.length || 0})
           </h3>
           <div className="space-y-2">
-            {recentEntries && recentEntries.length > 0 ? (
-              recentEntries.map((vehicle, index) => {
-                const isSelected = selectedEntry?._id === vehicle._id;
+            {allEntries && allEntries.length > 0 ? (
+              allEntries.map((vehicle, index) => {
+                // So sánh _id hoặc id, chuyển về string để đảm bảo khớp chính xác
+                const vehicleId = String(vehicle._id || vehicle.id);
+                const selectedId = String(selectedEntry?._id || selectedEntry?.id || '');
+                const isSelected = vehicleId === selectedId;
+                const isLatest = index === 0;
+
                 return (
                   <div
                     key={vehicle._id || vehicle.id || index}
@@ -251,6 +275,9 @@ function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
                       <span className={`font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-800'}`}>
                         {vehicle.licensePlate}
                       </span>
+                      {isLatest && (
+                        <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">Mới nhất</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 text-sm text-gray-500">
                       <Clock size={14} />
@@ -260,7 +287,7 @@ function EntryLane({ latestEntry, recentEntries, onEntryAdded }) {
                 );
               })
             ) : (
-              <p className="text-center text-gray-400 text-sm py-4">Chưa có lịch sử</p>
+              <p className="text-center text-gray-400 text-sm py-4">Chưa có xe trong bãi</p>
             )}
           </div>
         </div>

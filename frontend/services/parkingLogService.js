@@ -104,7 +104,10 @@ const parkingLogService = {
    */
   getCurrentParking: async () => {
     try {
-      const response = await axios.get(`${API_URL}/parking/logs`)
+      // Lấy toàn bộ xe trong bãi (limit cao để đảm bảo lấy hết)
+      const response = await axios.get(`${API_URL}/parking/logs`, {
+        params: { limit: 1000 }
+      })
       return response.data
     } catch (error) {
       console.error('Error fetching current parking:', error)
