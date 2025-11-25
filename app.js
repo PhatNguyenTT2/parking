@@ -22,12 +22,15 @@ mongoose
 // CORS configuration - cho phép frontend gọi API
 app.use(cors())
 
-app.use(express.static('dist'))
-app.use(express.static('public')) // Serve static files (hình ảnh)
 app.use(express.json())
 app.use(middleware.requestLogger)
 
+// API routes MUST come before static files
 app.use('/api/parking/logs', parkingLogRouter)
+
+// Serve static files (frontend build & images)
+app.use(express.static('dist'))
+app.use(express.static('public'))
 
 app.use(middleware.unknownEndpoint)
 app.use(middleware.errorHandler)
