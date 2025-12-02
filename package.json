@@ -1,27 +1,23 @@
 {
   "name": "parkingBackend",
   "version": "0.0.1",
-  "main": "index.js",
+  "main": "python/main.py",
   "scripts": {
-    "start": "cross-env NODE_ENV=production node index.js",
-    "dev": "cross-env NODE_ENV=development node --watch index.js",
-    "test": "cross-env  NODE_ENV=test node --test",
-    "build:ui": "rm -rf dist && cd ./frontend && npm run build && cp -r dist ../dist",
-    "deploy:full": "npm run build:ui && git add . && git commit -m uibuild && git push",
-    "lint": "eslint ."
+    "start": "cd python && python main.py",
+    "dev": "cd python && python main.py",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:python": "cd python && pip install -r requirements.txt",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:python && npm run install:frontend",
+    "build:ui": "cd frontend && npm run build && cd ..",
+    "deploy:render": "npm run build:ui && git add . && git commit -m \"Deploy to Render\" && git push",
+    "lint:python": "cd python && pylint **/*.py",
+    "lint:frontend": "cd frontend && npm run lint"
   },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^5.1.0",
-    "mongoose": "^8.11.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.22.0",
-    "@stylistic/eslint-plugin-js": "^4.2.0",
-    "cross-env": "^7.0.3",
-    "eslint": "^9.22.0",
-    "globals": "^16.0.0",
-    "supertest": "^7.1.0"
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.11.0"
   }
 }

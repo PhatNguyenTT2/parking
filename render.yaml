@@ -1,0 +1,33 @@
+services:
+  # Python FastAPI Backend
+  - type: web
+    name: parking-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r python/requirements.txt
+    startCommand: cd python && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        value: 3001
+      - key: MONGODB_URI
+        sync: false
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /
+    
+  # Frontend (Static Site)
+  - type: web
+    name: parking-frontend
+    runtime: static
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: 18.0.0
