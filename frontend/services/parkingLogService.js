@@ -49,13 +49,18 @@ const parkingLogService = {
    * @param {Object} logData - Parking log data
    * @param {string} logData.licensePlate - License plate (required)
    * @param {string} logData.cardId - Card ID (required)
-   * @param {string} logData.image - Image URL (optional)
-   * @param {Date|string} logData.entryTime - Entry time (optional, defaults to now)
+   * @param {string} logData.image - Image URL (optional) - will be mapped to entryImage
    * @returns {Promise<Object>} Created parking log data
    */
   createLog: async (logData) => {
     try {
-      const response = await axios.post(`${API_URL}/parking/logs`, logData)
+      // Map 'image' field to 'entryImage' for Python backend compatibility
+      const payload = {
+        licensePlate: logData.licensePlate,
+        cardId: logData.cardId,
+        entryImage: logData.image || logData.entryImage || null
+      }
+      const response = await axios.post(`${API_URL}/parking/logs`, payload)
       return response.data
     } catch (error) {
       console.error('Error creating parking log:', error)
@@ -104,10 +109,8 @@ const parkingLogService = {
    */
   getCurrentParking: async () => {
     try {
-      // Lấy toàn bộ xe trong bãi (limit cao để đảm bảo lấy hết)
-      const response = await axios.get(`${API_URL}/parking/logs`, {
-        params: { limit: 1000 }
-      })
+      // Use dedicated /current endpoint from Python backend
+      const response = await axios.get(`${API_URL}/parking/logs/current`)
       return response.data
     } catch (error) {
       console.error('Error fetching current parking:', error)
@@ -247,64 +250,62 @@ const parkingLogService = {
 
   /**
    * Process vehicle exit
-   * Helper method to handle exit workflow
+   * Helper method to handle exit workflow - Python backend handles validation
    * @param {string} cardId - Card ID
    * @param {string} exitLicensePlate - License plate detected at exit
+   * @param {string} exitImage - Exit image URL (optional)
    * @returns {Promise<Object>} Exit result with validation
    */
-  processExit: async (cardId, exitLicensePlate) => {
+  processExit: async (cardId, exitLicensePlate, exitImage = null) => {
     try {
-      // Find entry log by card ID
-      const entryResponse = await axios.get(`${API_URL}/parking/logs`, {
-        params: { cardId }
+      // Use Python backend's PUT /exit endpoint (handles validation server-side)
+      const response = await axios.put(`${API_URL}/parking/logs/exit`, {
+        cardId,
+        exitLicensePlate,
+        exitImage
       })
 
-      if (!entryResponse.data.data.parkingLogs.length) {
+      return response.data
+    } catch (error) {
+      console.error('Error processing vehicle exit:', error)
+
+      // Handle error response from Python backend
+      if (error.response?.status === 404) {
         return {
           success: false,
           error: {
             code: 'NO_ENTRY_FOUND',
-            message: 'No entry record found for this card'
+            message: error.response.data.detail || 'No entry record found for this card'
           }
         }
       }
 
-      const entryLog = entryResponse.data.data.parkingLogs[0]
+      if (error.response?.status === 400) {
+        // Get vehicle data from separate request for force exit option
+        let vehicleData = null
+        try {
+          const getResponse = await axios.get(`${API_URL}/parking/logs/current`)
+          const vehicle = getResponse.data?.data?.parkingLogs?.find(log => log.cardId === cardId)
+          if (vehicle) {
+            vehicleData = vehicle
+          }
+        } catch (getError) {
+          console.error('Error fetching vehicle data:', getError)
+        }
 
-      // Validate license plate match
-      const licensePlateMatch =
-        entryLog.licensePlate.toUpperCase() === exitLicensePlate.toUpperCase()
-
-      if (!licensePlateMatch) {
         return {
           success: false,
+          data: vehicleData,
           error: {
             code: 'LICENSE_PLATE_MISMATCH',
-            message: 'License plate does not match',
-            details: {
-              entry: entryLog.licensePlate,
-              exit: exitLicensePlate
-            },
-            entryImage: entryLog.image // Add entry image for comparison
+            message: error.response.data.detail || 'License plate does not match'
           }
         }
       }
 
-      // Delete entry log (process exit)
-      const exitResponse = await axios.delete(`${API_URL}/parking/logs/${entryLog.id}`)
-
-      return {
-        success: true,
-        data: exitResponse.data.data,
-        message: 'Vehicle exit processed successfully'
-      }
-    } catch (error) {
-      console.error('Error processing vehicle exit:', error)
       throw error
     }
-  },
-
-  /**
+  },  /**
    * Get parking statistics
    * @param {string} startDate - Start date (optional)
    * @param {string} endDate - End date (optional)

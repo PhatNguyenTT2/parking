@@ -1,0 +1,18 @@
+# Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Database
+motor==3.6.0
+pymongo==4.10.1
+
+# Data Validation
+pydantic==2.10.0
+pydantic-settings==2.6.1
+
+# Environment
+python-dotenv==1.0.1
+
+# Development
+pytest==8.3.4
+httpx==0.28.1

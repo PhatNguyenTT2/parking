@@ -12,6 +12,35 @@ function ExitLane({ onExitProcessed }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [exitTime, setExitTime] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmExit = async () => {
+    if (!result?.data?.id) return;
+
+    setIsDeleting(true);
+    try {
+      await parkingLogService.deleteLog(result.data.id);
+
+      // Show success and clear result
+      setResult({
+        ...result,
+        confirmed: true
+      });
+
+      // Notify parent to refresh data
+      if (onExitProcessed) onExitProcessed();
+
+      // Auto-clear after 2 seconds
+      setTimeout(() => {
+        setResult(null);
+        setExitTime(null);
+      }, 2000);
+    } catch (err) {
+      setError('Lỗi khi xác nhận xe ra: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +55,8 @@ function ExitLane({ onExitProcessed }) {
     try {
       const exitResult = await parkingLogService.processExit(
         formData.cardId,
-        formData.exitLicensePlate.toUpperCase()
+        formData.exitLicensePlate.toUpperCase(),
+        formData.exitImage || null
       );
 
       if (exitResult.success) {
@@ -42,12 +72,12 @@ function ExitLane({ onExitProcessed }) {
         });
         // Clear form inputs after successful processing
         setFormData({ cardId: '', exitLicensePlate: '', exitImage: '' });
-        // Notify parent immediately to refresh data
-        if (onExitProcessed) onExitProcessed();
+        // DO NOT refresh here - wait for confirmation button
       } else {
         setError(exitResult.error.message);
         setResult({
           success: false,
+          data: exitResult.data || null,
           error: exitResult.error,
           exitImage: formData.exitImage,
           exitTime: currentExitTime
@@ -240,18 +270,41 @@ function ExitLane({ onExitProcessed }) {
                   </span>
                 </div>
 
+                {/* Confirmation Button */}
+                {!result.confirmed && (
+                  <button
+                    onClick={handleConfirmExit}
+                    disabled={isDeleting}
+                    className="w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isDeleting ? 'Đang xử lý...' : (
+                      <>
+                        Xác Nhận Cho Xe Ra
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {result.confirmed && (
+                  <div className="bg-green-100 p-3 rounded-lg border border-green-300 text-center">
+                    <span className="text-green-700 font-semibold flex items-center justify-center gap-2">
+                      Đã xác nhận - Xe đã rời bãi
+                    </span>
+                  </div>
+                )}
+
                 {/* Image Comparison - Success Case */}
-                {(result.data.image || result.data.exitImage) && (
+                {(result.data.entryImage || result.data.exitImage) && (
                   <div className="mt-3 border-t pt-3">
                     <p className="text-xs text-center mb-2 text-gray-600 font-semibold">Đối Chiếu Hình Ảnh</p>
                     <div className="grid grid-cols-2 gap-2">
                       {/* Entry Image */}
                       <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                        <p className="text-xs text-center mb-1 text-emerald-600 font-semibold">Ảnh vào</p>
+                        <p className="text-xs text-center mb-1 text-emerald-600 font-semibold">Ảnh vào (DB)</p>
                         <div className="bg-white rounded h-32 overflow-hidden border border-gray-200">
-                          {result.data.image ? (
+                          {result.data.entryImage ? (
                             <img
-                              src={result.data.image}
+                              src={result.data.entryImage}
                               alt="Entry"
                               className="w-full h-full object-contain"
                             />
@@ -315,21 +368,45 @@ function ExitLane({ onExitProcessed }) {
                 )}
                 <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                   <p className="text-yellow-800 text-sm text-center">
-                    ⚠️ Không cho phép xe ra - Vui lòng kiểm tra lại
+                    Không cho phép xe ra - Vui lòng kiểm tra lại
                   </p>
                 </div>
+
+                {/* Force Exit Button for mismatch */}
+                {result.error?.code === 'LICENSE_PLATE_MISMATCH' && result.data?.id && !result.confirmed && (
+                  <button
+                    onClick={handleConfirmExit}
+                    disabled={isDeleting}
+                    className="w-full bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isDeleting ? 'Đang xử lý...' : (
+                      <>
+                        Buộc Cho Xe Ra (Bỏ qua lỗi)
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {result.confirmed && (
+                  <div className="bg-green-100 p-3 rounded-lg border border-green-300 text-center">
+                    <span className="text-green-700 font-semibold flex items-center justify-center gap-2">
+                      <CheckCircle2 size={20} />
+                      ✅ Đã xác nhận - Xe đã rời bãi
+                    </span>
+                  </div>
+                )}
 
                 {/* Image Comparison - Error Case */}
                 <div className="mt-3 border-t pt-3">
                   <p className="text-xs text-center mb-2 text-gray-600 font-semibold">Đối Chiếu Hình Ảnh</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {/* Entry Image - từ database nếu có error details */}
+                    {/* Entry Image - từ database */}
                     <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
                       <p className="text-xs text-center mb-1 text-emerald-600 font-semibold">Ảnh vào (DB)</p>
                       <div className="bg-white rounded h-32 overflow-hidden border border-gray-200">
-                        {result.error?.entryImage ? (
+                        {result.data?.entryImage ? (
                           <img
-                            src={result.error.entryImage}
+                            src={result.data.entryImage}
                             alt="Entry from DB"
                             className="w-full h-full object-contain"
                           />
@@ -339,9 +416,9 @@ function ExitLane({ onExitProcessed }) {
                           </div>
                         )}
                       </div>
-                      {result.error?.details && (
+                      {result.data?.licensePlate && (
                         <p className="text-xs text-center mt-1 text-gray-500">
-                          Biển số: {result.error.details.entry}
+                          Biển số: {result.data.licensePlate}
                         </p>
                       )}
                     </div>

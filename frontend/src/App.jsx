@@ -41,10 +41,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header
-        totalInside={allLogs.length}
-        todayTotal={allLogs.length}
-      />
+      <Header />
 
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-2 gap-6 p-6 min-h-full">

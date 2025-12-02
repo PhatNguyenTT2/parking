@@ -1,6 +1,6 @@
 import { Clock } from 'lucide-react';
 
-function Header({ totalInside, todayTotal }) {
+function Header() {
   const currentTime = new Date().toLocaleString('vi-VN', {
     weekday: 'long',
     year: 'numeric',
@@ -17,19 +17,9 @@ function Header({ totalInside, todayTotal }) {
         <div className="flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-800">Hệ Thống Quản Lý Bãi Giữ Xe Máy</h1>
 
-          <div className="flex items-center gap-6">
-            <div className="text-sm text-gray-700">
-              <span className="font-medium">Xe trong bãi: </span>
-              <span className="font-bold text-emerald-600">{totalInside}</span>
-            </div>
-            <div className="text-sm text-gray-700">
-              <span className="font-medium">Tổng lượt hôm nay: </span>
-              <span className="font-bold text-blue-600">{todayTotal}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600 border-l border-gray-300 pl-6">
-              <Clock size={16} className="text-gray-500" />
-              <span>{currentTime}</span>
-            </div>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Clock size={16} className="text-gray-500" />
+            <span>{currentTime}</span>
           </div>
         </div>
       </div>

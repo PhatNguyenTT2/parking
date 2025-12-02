@@ -183,9 +183,9 @@ function EntryLane({ latestEntry, allEntries, onEntryAdded }) {
       <div className="flex-1 overflow-y-auto">
         {/* Image Display - hiển thị ảnh từ database */}
         <div className="m-4 bg-gray-100 rounded-lg overflow-hidden h-64 border border-gray-200 flex-shrink-0">
-          {(selectedEntry || latestEntry)?.image ? (
+          {(selectedEntry || latestEntry)?.entryImage ? (
             <img
-              src={(selectedEntry || latestEntry).image}
+              src={(selectedEntry || latestEntry).entryImage}
               alt="Entry vehicle"
               className="w-full h-full object-contain"
             />
